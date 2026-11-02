@@ -149,6 +149,7 @@ function escapeHTML(value) {
   );
 }
 
+
 function getToday'sDate() {
   const now = new Date();
 
@@ -156,8 +157,9 @@ function getToday'sDate() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
 
-  return `${year}-${month}-${day}`;
+  return year + "-" + month + "-" + day;
 }
+
 
 function createId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
