@@ -191,6 +191,10 @@ function showView(viewName) {
   if (viewName === "saved") {
     renderSavedExhibits();
   }
+  if (viewName === "related") {
+  currentRelatedExhibit = null;
+  renderRelatedExplorer();
+}
 }
 
 function initializeNavigation() {
@@ -632,12 +636,11 @@ function renderSavedExhibits() {
 // 8. APPLICATION STARTUP
 // ==========================================
 
+
 function initializeApp() {
   initializeNavigation();
   initializeGenerator();
-
-  // The Related and Temporal tools will be
-  // implemented in the next development step.
+  initializeRelatedExplorer();
 
   showView("generator");
 }
@@ -647,3 +650,438 @@ document.addEventListener(
   initializeApp
 );
 
+
+/* ==========================================
+   9. RELATED EXHIBIT EXPLORER
+   ========================================== */
+
+// Relationships are documentary possibilities,
+// not established events in the Prometheus archive.
+
+const relatedExhibitLibrary = {
+  "Equipment Service Variance Report": {
+    before: [
+      "Preventive Maintenance Schedule",
+      "The earlier schedule identifies equipment assigned for servicing."
+    ],
+    after: [
+      "Supervisor Clarification Request",
+      "A supervisor requests clarification of the recorded service interval."
+    ],
+    parallel: [
+      "Equipment Downtime Register",
+      "An operating department records when the equipment was unavailable."
+    ],
+    administrative: [
+      "Replacement Parts Requisition",
+      "Materials personnel document a request for components used in servicing."
+    ]
+  },
+
+  "Laboratory Quality Control Checklist": {
+    before: [
+      "Laboratory Batch Preparation Record",
+      "A preparation record lists materials, equipment, and controls used."
+    ],
+    after: [
+      "Quality Assurance Review Notice",
+      "A reviewer requests confirmation that the documentation is complete."
+    ],
+    parallel: [
+      "Laboratory Instrument Use Register",
+      "A separate register records equipment usage during the relevant period."
+    ],
+    administrative: [
+      "Document Correction Request",
+      "Records personnel request a corrected or completed copy of a form."
+    ]
+  },
+
+  "Materials Receipt Discrepancy": {
+    before: [
+      "Purchase Order",
+      "The original order establishes the requested items and quantities."
+    ],
+    after: [
+      "Vendor Clarification Correspondence",
+      "Purchasing requests clarification of the shipment documentation."
+    ],
+    parallel: [
+      "Warehouse Inventory Entry",
+      "Stores personnel document how the received materials entered inventory."
+    ],
+    administrative: [
+      "Invoice Matching Worksheet",
+      "Accounts payable compares purchasing and receiving records."
+    ]
+  },
+
+  "Overtime Reconciliation Worksheet": {
+    before: [
+      "Overtime Authorization Form",
+      "A department records its approval of additional working hours."
+    ],
+    after: [
+      "Payroll Adjustment Notice",
+      "Payroll documents a proposed correction to recorded hours."
+    ],
+    parallel: [
+      "Shift Attendance Register",
+      "The department's attendance records provide another account of hours."
+    ],
+    administrative: [
+      "Cost Center Allocation Summary",
+      "Accounting reviews which budget should carry the recorded expense."
+    ]
+  },
+
+  "Access Badge Replacement Register": {
+    before: [
+      "Original Credential Issue Record",
+      "Security administration records the original credential assignment."
+    ],
+    after: [
+      "Credential Deactivation Confirmation",
+      "Security staff document the disposition of the earlier credential."
+    ],
+    parallel: [
+      "Access Control Activity Log",
+      "An access system records activity associated with the credential."
+    ],
+    administrative: [
+      "Credential Replacement Authorization",
+      "Administration documents approval of the replacement request."
+    ]
+  },
+
+  "Office Supply Requisition": {
+    before: [
+      "Department Supply Inventory",
+      "An office records the supplies remaining before a new request."
+    ],
+    after: [
+      "Supply Issue Voucher",
+      "Stores personnel document the materials issued to the department."
+    ],
+    parallel: [
+      "Office Expenditure Summary",
+      "Accounting compiles spending on routine administrative supplies."
+    ],
+    administrative: [
+      "Expense Allocation Record",
+      "A purchasing or accounting employee assigns the expense to a department."
+    ]
+  }
+};
+
+// Generic relationships for documents that aren't
+// individually included in the reference library.
+
+const defaultRelationships = {
+  before: [
+    "Preliminary Department Record",
+    "An earlier departmental record may establish the circumstances " +
+    "under which the original document was prepared."
+  ],
+  after: [
+    "Follow-Up Correspondence",
+    "An employee or supervisor may request clarification " +
+    "after reviewing the original record."
+  ],
+  parallel: [
+    "Independent Department Summary",
+    "Another department may maintain a separate record " +
+    "concerning the same operational activity."
+  ],
+  administrative: [
+    "Administrative Processing Record",
+    "An administrative employee may document the filing, " +
+    "distribution, or processing of the original record."
+  ]
+};
+
+const relationshipLabels = {
+  before: "What Came Before?",
+  after: "What Happened Next?",
+  parallel: "Another Perspective",
+  administrative: "Administrative Paper Trail"
+};
+
+let selectedRelationship = "after";
+let currentRelatedExhibit = null;
+
+function initializeRelatedExplorer() {
+  const controls = document.getElementById(
+    "related-controls"
+  );
+
+  controls.innerHTML = `
+    <div class="control-group">
+      <label for="relationship-type">
+        Documentary Relationship
+      </label>
+
+      <select id="relationship-type">
+        <option value="before">
+          What Came Before?
+        </option>
+        <option value="after" selected>
+          What Happened Next?
+        </option>
+        <option value="parallel">
+          Another Perspective
+        </option>
+        <option value="administrative">
+          Administrative Paper Trail
+        </option>
+      </select>
+    </div>
+
+    <button
+      id="generate-related-button"
+      class="primary-button"
+    >
+      Generate Related Exhibit
+    </button>
+  `;
+
+  document.getElementById(
+    "relationship-type"
+  ).addEventListener("change", event => {
+    selectedRelationship = event.target.value;
+  });
+
+  document.getElementById(
+    "generate-related-button"
+  ).addEventListener("click", generateRelatedExhibit);
+
+  renderRelatedExplorer();
+}
+
+function renderRelatedExplorer() {
+  const results = document.getElementById(
+    "related-results"
+  );
+
+  if (!currentExhibit) {
+    results.innerHTML = `
+      <div class="exhibit-card">
+        <h3>No Parent Exhibit Selected</h3>
+
+        <p>
+          Generate an exhibit first, then return here
+          to explore its documentary relationships.
+        </p>
+
+        <button
+          id="return-to-generator"
+          class="secondary-button"
+        >
+          Open Exhibit Generator
+        </button>
+      </div>
+    `;
+
+    document.getElementById(
+      "return-to-generator"
+    ).addEventListener("click", () => {
+      showView("generator");
+    });
+
+    return;
+  }
+
+  results.innerHTML = `
+    <div class="exhibit-card">
+      <div class="exhibit-metadata">
+        <span class="metadata-tag">Parent Exhibit</span>
+        <span class="metadata-tag">
+          ${escapeHTML(currentExhibit.classification)}
+        </span>
+      </div>
+
+      <h3>${escapeHTML(currentExhibit.title)}</h3>
+
+      <p>${escapeHTML(currentExhibit.activity)}</p>
+
+      <p>
+        <strong>Proposed Date:</strong>
+        ${escapeHTML(currentExhibit.proposedDate)}
+      </p>
+    </div>
+
+    <div id="related-proposal"></div>
+  `;
+}
+
+function generateRelatedExhibit() {
+  if (!currentExhibit) {
+    renderRelatedExplorer();
+    return;
+  }
+
+  const relationships =
+    relatedExhibitLibrary[currentExhibit.title] ||
+    defaultRelationships;
+
+  const suggestion =
+    relationships[selectedRelationship] ||
+    defaultRelationships[selectedRelationship];
+
+  currentRelatedExhibit = {
+    id: createId(),
+    parentId: currentExhibit.id,
+    parentTitle: currentExhibit.title,
+    title: suggestion[0],
+    activity: suggestion[1],
+    division: currentExhibit.division,
+    occupation: "Pending occupational verification",
+    classification: "Pending classification",
+    proposedDate: "",
+    significance: 1,
+    creativeMode: "hands-off",
+    circumstance: "",
+    relationship: selectedRelationship,
+    status: "Proposed"
+  };
+
+  renderRelatedProposal();
+}
+
+function renderRelatedProposal() {
+  if (!currentRelatedExhibit) return;
+
+  const related = currentRelatedExhibit;
+
+  const container = document.getElementById(
+    "related-proposal"
+  );
+
+  if (!container) return;
+
+  container.innerHTML = `
+    <article class="exhibit-card">
+      <div class="exhibit-metadata">
+        <span class="metadata-tag">
+          Proposed Related Record
+        </span>
+
+        <span class="metadata-tag">
+          ${escapeHTML(
+            relationshipLabels[related.relationship]
+          )}
+        </span>
+      </div>
+
+      <h3>${escapeHTML(related.title)}</h3>
+
+      <p>${escapeHTML(related.activity)}</p>
+
+      <p>
+        <strong>Relationship:</strong>
+        ${escapeHTML(related.parentTitle)}
+      </p>
+
+      <p>
+        <strong>Date:</strong>
+        Not yet determined
+      </p>
+
+      <p>
+        <em>
+          This document is a possibility, not an
+          established part of the Prometheus archive.
+        </em>
+      </p>
+
+      <div class="action-row">
+        <button
+          id="save-related"
+          class="secondary-button"
+        >
+          Save Related Idea
+        </button>
+
+        <button
+          id="copy-related"
+          class="secondary-button"
+        >
+          Copy
+        </button>
+
+        <button
+          id="explore-related-timing"
+          class="primary-button"
+        >
+          Explore Timing
+        </button>
+      </div>
+    </article>
+  `;
+
+  document.getElementById(
+    "save-related"
+  ).addEventListener("click", saveRelatedExhibit);
+
+  document.getElementById(
+    "copy-related"
+  ).addEventListener("click", copyRelatedExhibit);
+
+  document.getElementById(
+    "explore-related-timing"
+  ).addEventListener("click", () => {
+    showView("temporal");
+  });
+}
+
+function formatRelatedExhibit(related) {
+  return [
+    "PROPOSED RELATED EXHIBIT: " + related.title,
+    "Parent Exhibit: " + related.parentTitle,
+    "Relationship: " +
+      relationshipLabels[related.relationship],
+    "",
+    related.activity,
+    "",
+    "Date: Not yet determined",
+    "Occupation: Pending verification",
+    "Classification: Pending verification",
+    "",
+    "Status: Proposed — Not Established Canon"
+  ].join("\n");
+}
+
+async function copyRelatedExhibit() {
+  if (!currentRelatedExhibit) return;
+
+  try {
+    await navigator.clipboard.writeText(
+      formatRelatedExhibit(currentRelatedExhibit)
+    );
+
+    alert("Related exhibit copied.");
+  } catch (error) {
+    alert("Clipboard access is unavailable.");
+  }
+}
+
+function saveRelatedExhibit() {
+  if (!currentRelatedExhibit) return;
+
+  if (savedExhibits.some(
+    item => item.id === currentRelatedExhibit.id
+  )) {
+    alert("This related exhibit is already saved.");
+    return;
+  }
+
+  savedExhibits.push({
+    ...currentRelatedExhibit
+  });
+
+  if (persistSavedExhibits()) {
+    alert("Related exhibit idea saved.");
+  } else {
+    savedExhibits.pop();
+  }
+}
