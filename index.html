@@ -1,1 +1,101 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Prometheus | Exhibit Development Engine</title>
+
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+  <div class="app-container">
+
+    <header class="app-header">
+      <div class="branding">
+        <p class="eyebrow">PROMETHEUS ARCHIVE</p>
+        <h1>Exhibit Development Engine</h1>
+        <p class="subtitle">
+          Institutional realism. Creative freedom.
+        </p>
+      </div>
+
+      <span class="version">Version 0.2</span>
+    </header>
+
+    <nav class="main-navigation" aria-label="Main navigation">
+      <button class="nav-button active" data-view="generator">
+        Exhibit Generator
+      </button>
+
+      <button class="nav-button" data-view="related">
+        Related Exhibits
+      </button>
+
+      <button class="nav-button" data-view="temporal">
+        Temporal Explorer
+      </button>
+
+      <button class="nav-button" data-view="saved">
+        Saved Ideas
+      </button>
+    </nav>
+
+    <main id="app-content">
+      <section id="generator" class="app-view active">
+        <h2>Exhibit Generator</h2>
+        <p>
+          Develop historically plausible corporate records
+          without surrendering narrative control.
+        </p>
+
+        <div id="generator-controls"></div>
+        <div id="generator-results"></div>
+      </section>
+
+      <section id="related" class="app-view" hidden>
+        <h2>Related Exhibit Explorer</h2>
+        <p>
+          Explore documents that might precede, follow,
+          or accompany an existing exhibit.
+        </p>
+
+        <div id="related-controls"></div>
+        <div id="related-results"></div>
+      </section>
+
+      <section id="temporal" class="app-view" hidden>
+        <h2>Temporal Relationship Explorer</h2>
+        <p>
+          Explore plausible documentary timelines
+          without imposing rigid chronological rules.
+        </p>
+
+        <div id="temporal-controls"></div>
+        <div id="temporal-results"></div>
+      </section>
+
+      <section id="saved" class="app-view" hidden>
+        <h2>Saved Exhibit Ideas</h2>
+        <p>
+          Review and organize your proposed exhibits.
+        </p>
+
+        <div id="saved-results"></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>
+        All generated exhibits are proposals until
+        incorporated into the Prometheus archive.
+      </p>
+    </footer>
+
+  </div>
+</body>
+</html>
+
