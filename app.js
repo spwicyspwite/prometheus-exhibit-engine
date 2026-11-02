@@ -1410,34 +1410,66 @@ function renderTemporalExplorer() {
   document.getElementById("temporal-chosen").value =
     temporalContext.chosenDate;
 
-  if (temporalContext.parentTitle) {
-    context.innerHTML = `
-      <div class="exhibit-card">
-        <div class="exhibit-metadata">
-          <span class="metadata-tag">
-            Connected Exhibit Relationship
-          </span>
-        </div>
-
-        <p>
-          <strong>Parent:</strong>
-          ${escapeHTML(temporalContext.parentTitle)}
-        </p>
-
-        <p>
-          <strong>Related:</strong>
-          ${escapeHTML(temporalContext.relatedTitle)}
-        </p>
+  
+if (temporalContext.parentTitle) {
+  context.innerHTML = `
+    <div class="exhibit-card">
+      <div class="exhibit-metadata">
+        <span class="metadata-tag">
+          Connected Exhibit Relationship
+        </span>
       </div>
-    `;
-  } else {
-    context.innerHTML = `
+
       <p>
-        Independent mode: enter any anchor date and
-        investigate a possible related-document date.
+        <strong>Parent:</strong>
+        ${escapeHTML(temporalContext.parentTitle)}
       </p>
-    `;
-  }
+
+      <p>
+        <strong>Related:</strong>
+        ${escapeHTML(temporalContext.relatedTitle)}
+      </p>
+
+      <button
+        id="switch-independent"
+        type="button"
+        class="secondary-button"
+      >
+        Switch to Independent Mode
+      </button>
+    </div>
+  `;
+
+  document.getElementById(
+    "switch-independent"
+  ).addEventListener("click", () => {
+    temporalContext.parentTitle = "";
+    temporalContext.relatedTitle = "";
+
+    renderTemporalExplorer();
+  });
+
+} else {
+  context.innerHTML = `
+    <div class="exhibit-card">
+      <div class="exhibit-metadata">
+        <span class="metadata-tag">
+          Independent Mode
+        </span>
+      </div>
+
+      <p>
+        Explore a documentary relationship without
+        connecting it to a generated exhibit.
+      </p>
+
+      <p>
+        Your dates and administrative process can
+        be adjusted independently.
+      </p>
+    </div>
+  `;
+}
 
   const result = document.getElementById(
     "temporal-results"
