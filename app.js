@@ -544,6 +544,13 @@ function saveCurrentExhibit() {
 }
 
 function formatExhibit(exhibit) {
+
+  // Related exhibits need their own formatting.
+  if (exhibit.parentId) {
+    return formatRelatedExhibit(exhibit);
+  }
+
+  // Original exhibits retain their existing format.
   return [
     `PROPOSED EXHIBIT: ${exhibit.title}`,
     `Classification: ${exhibit.classification}`,
@@ -558,11 +565,7 @@ function formatExhibit(exhibit) {
     getCreativeText(exhibit),
     "",
     "Status: Proposed — Not Established Canon"
-  ].filter(
-    (line, index, array) =>
-      line !== "" ||
-      (index > 0 && array[index - 1] !== "")
-  ).join("\n");
+  ].join("\n");
 }
 
 async function copyExhibit(exhibit) {
@@ -994,10 +997,14 @@ function renderRelatedProposal() {
         ${escapeHTML(related.parentTitle)}
       </p>
 
-      <p>
-        <strong>Date:</strong>
-        Not yet determined
-      </p>
+    <p>
+        <strong>Proposed Date:</strong>
+        ${
+        related.proposedDate
+        ? escapeHTML(related.proposedDate)
+        : "Not yet determined"
+        }
+    </p>
 
       <p>
         <em>
@@ -1050,15 +1057,23 @@ document.getElementById(
 function formatRelatedExhibit(related) {
   return [
     "PROPOSED RELATED EXHIBIT: " + related.title,
+
     "Parent Exhibit: " + related.parentTitle,
+
     "Relationship: " +
       relationshipLabels[related.relationship],
+
+    "Division: " + related.division,
+
+    "Occupation: " + related.occupation,
+
+    "Classification: " + related.classification,
+
+    "Proposed Date: " +
+      (related.proposedDate || "Not yet determined"),
+
     "",
     related.activity,
-    "",
-    "Date: Not yet determined",
-    "Occupation: Pending verification",
-    "Classification: Pending verification",
     "",
     "Status: Proposed — Not Established Canon"
   ].join("\n");
@@ -1645,6 +1660,9 @@ function applyTemporalRelationship() {
       return;
     }
   }
+
+    // Refresh the related exhibit's displayed information.
+    renderRelatedProposal();
 
   alert(
     "Chosen date applied to the related exhibit. " +
