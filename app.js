@@ -657,6 +657,7 @@ function initializeApp() {
   initializeGenerator();
   initializeRelatedExplorer();
   initializeTemporalExplorer();
+  initializeBackupTools();
 
   showView("generator");
 }
@@ -1668,4 +1669,313 @@ function applyTemporalRelationship() {
     "Chosen date applied to the related exhibit. " +
     "This remains a proposal, not established canon."
   );
+}
+
+
+/* ==========================================
+   11. SAVED IDEAS BACKUP AND RESTORE
+   ========================================== */
+
+const BACKUP_FORMAT = "prometheus-exhibit-backup";
+const BACKUP_VERSION = 1;
+const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+
+function initializeBackupTools() {
+  const savedResults = document.getElementById(
+    "saved-results"
+  );
+
+  if (!savedResults) return;
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "action-row";
+
+  toolbar.innerHTML = `
+    <button
+      id="export-ideas"
+      class="primary-button"
+      type="button"
+    >
+      Export Ideas
+    </button>
+
+    <button
+      id="import-ideas"
+      class="secondary-button"
+      type="button"
+    >
+      Import Ideas
+    </button>
+
+    <input
+      id="backup-file-input"
+      type="file"
+      accept=".json,application/json"
+      hidden
+    >
+
+    <p id="backup-status" role="status"></p>
+  `;
+
+  savedResults.before(toolbar);
+
+  document.getElementById(
+    "export-ideas"
+  ).addEventListener("click", exportSavedIdeas);
+
+  document.getElementById(
+    "import-ideas"
+  ).addEventListener("click", () => {
+    document.getElementById(
+      "backup-file-input"
+    ).click();
+  });
+
+  document.getElementById(
+    "backup-file-input"
+  ).addEventListener("change", importSavedIdeas);
+}
+
+function setBackupStatus(message) {
+  const status = document.getElementById(
+    "backup-status"
+  );
+
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+// ------------------------------------------
+// EXPORT
+// ------------------------------------------
+
+function exportSavedIdeas() {
+  const backup = {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    exhibits: savedExhibits
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+
+  const blob = new Blob([json], {
+    type: "application/json"
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  const date = getTodaysDate();
+
+  link.href = url;
+  link.download =
+    "prometheus-exhibits-" + date + ".json";
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  // Give the browser time to start its download.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 60000);
+
+  setBackupStatus(
+    "Export prepared: " +
+    savedExhibits.length +
+    " exhibit(s). Check your browser downloads."
+  );
+}
+
+// ------------------------------------------
+// IMPORT VALIDATION
+// ------------------------------------------
+
+// Keep only fields understood by this version.
+// Imported records must remain proposals.
+
+function validateImportedExhibit(item) {
+  if (
+    !item ||
+    typeof item !== "object" ||
+    Array.isArray(item)
+  ) {
+    throw new Error("Invalid exhibit record.");
+  }
+
+  if (
+    typeof item.id !== "string" ||
+    !item.id.trim() ||
+    typeof item.title !== "string" ||
+    !item.title.trim() ||
+    typeof item.activity !== "string"
+  ) {
+    throw new Error(
+      "An exhibit is missing required information."
+    );
+  }
+
+  const fields = [
+    "id",
+    "title",
+    "division",
+    "occupation",
+    "classification",
+    "activity",
+    "circumstance",
+    "proposedDate",
+    "creativeMode",
+    "parentId",
+    "parentTitle",
+    "relationship"
+  ];
+
+  const exhibit = {};
+
+  for (const field of fields) {
+    const value = item[field];
+
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (
+      typeof value !== "string" ||
+      value.length > 10000
+    ) {
+      throw new Error(
+        "Invalid field in imported exhibit: " + field
+      );
+    }
+
+    exhibit[field] = value;
+  }
+
+  exhibit.significance =
+    Number.isInteger(item.significance) &&
+    item.significance >= 0 &&
+    item.significance <= 4
+      ? item.significance
+      : 1;
+
+  if (!["hands-off", "guided", "creative"].includes(
+    exhibit.creativeMode
+  )) {
+    exhibit.creativeMode = "hands-off";
+  }
+
+  if (
+    exhibit.parentId &&
+    !["before", "after", "parallel", "administrative"]
+      .includes(exhibit.relationship)
+  ) {
+    throw new Error(
+      "A related exhibit has an invalid relationship."
+    );
+  }
+
+  // Import never establishes a proposal as canon.
+  exhibit.status = "Proposed";
+
+  return exhibit;
+}
+
+// ------------------------------------------
+// IMPORT
+// ------------------------------------------
+
+async function importSavedIdeas(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+
+  // Allow the same file to be selected again.
+  input.value = "";
+
+  if (!file) return;
+
+  if (file.size > MAX_BACKUP_BYTES) {
+    setBackupStatus(
+      "Import failed: file exceeds the 5 MB limit."
+    );
+    return;
+  }
+
+  try {
+    const contents = await file.text();
+    const backup = JSON.parse(contents);
+
+    if (
+      !backup ||
+      backup.format !== BACKUP_FORMAT ||
+      backup.version !== BACKUP_VERSION ||
+      !Array.isArray(backup.exhibits)
+    ) {
+      throw new Error(
+        "Unsupported Prometheus backup format."
+      );
+    }
+
+    // Validate all records before changing storage.
+    const imported = backup.exhibits.map(
+      validateImportedExhibit
+    );
+
+    const existingIds = new Set(
+      savedExhibits.map(item => item.id)
+    );
+
+    const additions = [];
+
+    for (const exhibit of imported) {
+      if (existingIds.has(exhibit.id)) {
+        continue;
+      }
+
+      existingIds.add(exhibit.id);
+      additions.push(exhibit);
+    }
+
+    if (additions.length === 0) {
+      setBackupStatus(
+        "No new exhibits found. Existing records " +
+        "were left unchanged."
+      );
+      return;
+    }
+
+    const previous = savedExhibits;
+
+    savedExhibits = [
+      ...savedExhibits,
+      ...additions
+    ];
+
+    if (!persistSavedExhibits()) {
+      savedExhibits = previous;
+
+      setBackupStatus(
+        "Import failed: browser storage was unavailable."
+      );
+      return;
+    }
+
+    renderSavedExhibits();
+
+    setBackupStatus(
+      "Imported " +
+      additions.length +
+      " new exhibit(s). " +
+      (imported.length - additions.length) +
+      " duplicate(s) skipped."
+    );
+
+  } catch (error) {
+    console.error("Backup import failed:", error);
+
+    setBackupStatus(
+      "Import failed: " + error.message
+    );
+  }
 }
