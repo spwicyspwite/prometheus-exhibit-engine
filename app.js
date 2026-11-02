@@ -895,14 +895,11 @@ function renderRelatedExplorer() {
       </div>
     `;
 
-    
-document.getElementById(
-  "explore-related-timing"
-).addEventListener("click", () => {
-  prepareTemporalFromRelated();
-  showView("temporal");
-});
-
+    document.getElementById(
+      "return-to-generator"
+    ).addEventListener("click", () => {
+      showView("generator");
+    });
     return;
   }
 
@@ -1042,11 +1039,12 @@ function renderRelatedProposal() {
     "copy-related"
   ).addEventListener("click", copyRelatedExhibit);
 
-  document.getElementById(
-    "explore-related-timing"
-  ).addEventListener("click", () => {
-    showView("temporal");
-  });
+document.getElementById(
+  "explore-related-timing"
+).addEventListener("click", () => {
+  prepareTemporalFromRelated();
+  showView("temporal");
+});
 }
 
 function formatRelatedExhibit(related) {
