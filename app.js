@@ -191,10 +191,23 @@ function showView(viewName) {
   if (viewName === "saved") {
     renderSavedExhibits();
   }
-  if (viewName === "related") {
-  currentRelatedExhibit = null;
+  
+if (viewName === "related") {
   renderRelatedExplorer();
+
+  if (
+    currentRelatedExhibit &&
+    currentExhibit &&
+    currentRelatedExhibit.parentId === currentExhibit.id
+  ) {
+    renderRelatedProposal();
+  }
 }
+
+if (viewName === "temporal") {
+  renderTemporalExplorer();
+}
+
 }
 
 function initializeNavigation() {
@@ -636,11 +649,11 @@ function renderSavedExhibits() {
 // 8. APPLICATION STARTUP
 // ==========================================
 
-
 function initializeApp() {
   initializeNavigation();
   initializeGenerator();
   initializeRelatedExplorer();
+  initializeTemporalExplorer();
 
   showView("generator");
 }
@@ -882,11 +895,13 @@ function renderRelatedExplorer() {
       </div>
     `;
 
-    document.getElementById(
-      "return-to-generator"
-    ).addEventListener("click", () => {
-      showView("generator");
-    });
+    
+document.getElementById(
+  "explore-related-timing"
+).addEventListener("click", () => {
+  prepareTemporalFromRelated();
+  showView("temporal");
+});
 
     return;
   }
@@ -1084,4 +1099,557 @@ function saveRelatedExhibit() {
   } else {
     savedExhibits.pop();
   }
+}
+
+
+/* ==========================================
+   10. TEMPORAL RELATIONSHIP EXPLORER
+   ========================================== */
+
+/*
+ * These are illustrative administrative windows,
+ * NOT established InGen processing requirements.
+ */
+
+const temporalWindows = {
+  urgent: {
+    label: "Urgent Operational Response",
+    minimum: 0,
+    maximum: 2,
+    explanation:
+      "An urgent operational matter might be documented " +
+      "on the same day or within the next 48 hours."
+  },
+
+  routine: {
+    label: "Routine Administrative Follow-Up",
+    minimum: 1,
+    maximum: 14,
+    explanation:
+      "Routine internal correspondence or review might " +
+      "occur within approximately two weeks."
+  },
+
+  procurement: {
+    label: "Procurement or Materials Processing",
+    minimum: 7,
+    maximum: 90,
+    explanation:
+      "Purchasing, materials handling, vendor correspondence, " +
+      "and related processing may extend over several weeks."
+  },
+
+  periodic: {
+    label: "Periodic Management Review",
+    minimum: 30,
+    maximum: 90,
+    explanation:
+      "Some documents are reviewed in monthly or " +
+      "quarterly administrative cycles."
+  },
+
+  archival: {
+    label: "Archival Retrieval or Retrospective Review",
+    minimum: 90,
+    maximum: 730,
+    explanation:
+      "An existing document might be retrieved or reviewed " +
+      "months or years after its original preparation."
+  }
+};
+
+const temporalMechanisms = {
+  creation: "Document Creation",
+  distribution: "Document Distribution",
+  response: "Administrative Response",
+  retrospective: "Retrospective Discovery or Review"
+};
+
+let temporalContext = {
+  anchorDate: "1992-06-15",
+  direction: "after",
+  category: "routine",
+  mechanism: "response",
+  chosenDate: "1992-06-22",
+  parentTitle: "",
+  relatedTitle: ""
+};
+
+// Use UTC calendar arithmetic to avoid daylight-saving
+// transitions changing the number of elapsed days.
+
+const MILLISECONDS_PER_DAY = 86400000;
+
+function parseCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const parts = value.split("-").map(Number);
+
+  const date = new Date(Date.UTC(
+    parts[0],
+    parts[1] - 1,
+    parts[2]
+  ));
+
+  if (
+    date.getUTCFullYear() !== parts[0] ||
+    date.getUTCMonth() !== parts[1] - 1 ||
+    date.getUTCDate() !== parts[2]
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function dateToISO(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftCalendarDate(value, days) {
+  const date = parseCalendarDate(value);
+
+  if (!date) return "";
+
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return dateToISO(date);
+}
+
+function calculateDayDifference(first, second) {
+  const start = parseCalendarDate(first);
+  const end = parseCalendarDate(second);
+
+  if (!start || !end) return null;
+
+  return Math.round(
+    (end.getTime() - start.getTime()) /
+    MILLISECONDS_PER_DAY
+  );
+}
+
+function formatCalendarDate(value) {
+  const date = parseCalendarDate(value);
+
+  if (!date) return "Invalid date";
+
+  return date.toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+}
+
+// Called by the Related Exhibit Explorer.
+// It carries the selected exhibits into the calculator.
+
+function prepareTemporalFromRelated() {
+  if (!currentExhibit || !currentRelatedExhibit) {
+    return;
+  }
+
+  const relationship = currentRelatedExhibit.relationship;
+
+  const categoryByRelationship = {
+    before: "routine",
+    after: "routine",
+    parallel: "routine",
+    administrative: "procurement"
+  };
+
+  temporalContext.anchorDate =
+    currentExhibit.proposedDate || "1992-06-15";
+
+  temporalContext.direction =
+    relationship === "before" ? "before" : "after";
+
+  temporalContext.category =
+    categoryByRelationship[relationship] || "routine";
+
+  temporalContext.mechanism =
+    relationship === "before" ? "creation" : "response";
+
+  temporalContext.parentTitle = currentExhibit.title;
+  temporalContext.relatedTitle = currentRelatedExhibit.title;
+
+  if (currentRelatedExhibit.proposedDate) {
+    temporalContext.chosenDate =
+      currentRelatedExhibit.proposedDate;
+  } else {
+    const window = temporalWindows[temporalContext.category];
+
+    const offset = temporalContext.direction === "before"
+      ? -window.minimum
+      : window.minimum;
+
+    temporalContext.chosenDate = shiftCalendarDate(
+      temporalContext.anchorDate,
+      offset
+    );
+  }
+}
+
+function initializeTemporalExplorer() {
+  const controls = document.getElementById(
+    "temporal-controls"
+  );
+
+  controls.innerHTML = `
+    <div id="temporal-context"></div>
+
+    <div class="control-group">
+      <label for="temporal-anchor">
+        Anchor Exhibit Date
+      </label>
+      <input id="temporal-anchor" type="date">
+    </div>
+
+    <div class="control-group">
+      <label for="temporal-direction">
+        Temporal Direction
+      </label>
+      <select id="temporal-direction">
+        <option value="before">Before Parent Exhibit</option>
+        <option value="after">After Parent Exhibit</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="temporal-category">
+        Administrative Process
+      </label>
+      <select id="temporal-category">
+        <option value="urgent">Urgent Operational Response</option>
+        <option value="routine">Routine Administrative Follow-Up</option>
+        <option value="procurement">Procurement / Materials</option>
+        <option value="periodic">Periodic Management Review</option>
+        <option value="archival">Archival Retrieval / Review</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="temporal-mechanism">
+        What Does This Date Represent?
+      </label>
+      <select id="temporal-mechanism">
+        <option value="creation">Document Creation</option>
+        <option value="distribution">Document Distribution</option>
+        <option value="response">Administrative Response</option>
+        <option value="retrospective">Retrospective Discovery / Review</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="temporal-chosen">
+        Your Chosen Related Date
+      </label>
+      <input id="temporal-chosen" type="date">
+    </div>
+  `;
+
+  const bindings = [
+    ["temporal-anchor", "anchorDate"],
+    ["temporal-direction", "direction"],
+    ["temporal-category", "category"],
+    ["temporal-mechanism", "mechanism"],
+    ["temporal-chosen", "chosenDate"]
+  ];
+
+  bindings.forEach(([elementId, property]) => {
+    document.getElementById(elementId).addEventListener(
+      "change",
+      event => {
+        temporalContext[property] = event.target.value;
+        renderTemporalExplorer();
+      }
+    );
+  });
+
+  renderTemporalExplorer();
+}
+
+function renderTemporalExplorer() {
+  const context = document.getElementById(
+    "temporal-context"
+  );
+
+  if (!context) return;
+
+  // Keep the controls synchronized with the current
+  // parent/related record context.
+
+  document.getElementById("temporal-anchor").value =
+    temporalContext.anchorDate;
+
+  document.getElementById("temporal-direction").value =
+    temporalContext.direction;
+
+  document.getElementById("temporal-category").value =
+    temporalContext.category;
+
+  document.getElementById("temporal-mechanism").value =
+    temporalContext.mechanism;
+
+  document.getElementById("temporal-chosen").value =
+    temporalContext.chosenDate;
+
+  if (temporalContext.parentTitle) {
+    context.innerHTML = `
+      <div class="exhibit-card">
+        <div class="exhibit-metadata">
+          <span class="metadata-tag">
+            Connected Exhibit Relationship
+          </span>
+        </div>
+
+        <p>
+          <strong>Parent:</strong>
+          ${escapeHTML(temporalContext.parentTitle)}
+        </p>
+
+        <p>
+          <strong>Related:</strong>
+          ${escapeHTML(temporalContext.relatedTitle)}
+        </p>
+      </div>
+    `;
+  } else {
+    context.innerHTML = `
+      <p>
+        Independent mode: enter any anchor date and
+        investigate a possible related-document date.
+      </p>
+    `;
+  }
+
+  const result = document.getElementById(
+    "temporal-results"
+  );
+
+  const window = temporalWindows[temporalContext.category];
+
+  const {
+    anchorDate,
+    chosenDate,
+    direction,
+    mechanism
+  } = temporalContext;
+
+  const anchor = parseCalendarDate(anchorDate);
+  const chosen = parseCalendarDate(chosenDate);
+
+  if (!anchor || !chosen) {
+    result.textContent =
+      "Please select valid dates for both exhibits.";
+    return;
+  }
+
+  const multiplier = direction === "before" ? -1 : 1;
+
+  const lowerDate = shiftCalendarDate(
+    anchorDate,
+    direction === "before"
+      ? -window.maximum
+      : window.minimum
+  );
+
+  const upperDate = shiftCalendarDate(
+    anchorDate,
+    direction === "before"
+      ? -window.minimum
+      : window.maximum
+  );
+
+  const actualDifference = calculateDayDifference(
+    anchorDate,
+    chosenDate
+  );
+
+  const directionalDays =
+    actualDifference * multiplier;
+
+  let assessment = "";
+
+  if (directionalDays < 0) {
+    assessment =
+      "Your chosen date falls on the opposite side " +
+      "of the anchor date from the selected direction. " +
+      "Check whether Before or After is intended.";
+  } else if (directionalDays < window.minimum) {
+    assessment =
+      "Your chosen date is " +
+      (window.minimum - directionalDays) +
+      " day(s) earlier than the suggested interval. " +
+      "This is not automatically a continuity error.";
+  } else if (directionalDays > window.maximum) {
+    assessment =
+      "Your chosen date is " +
+      (directionalDays - window.maximum) +
+      " day(s) beyond the suggested maximum. " +
+      "An unusual delay may be entirely intentional.";
+  } else {
+    assessment =
+      "Your chosen date falls within the illustrative " +
+      "administrative window.";
+  }
+
+  result.innerHTML = `
+    <article class="exhibit-card">
+      <div class="exhibit-metadata">
+        <span class="metadata-tag">
+          Suggested Temporal Window
+        </span>
+        <span class="metadata-tag">
+          Not Canon
+        </span>
+      </div>
+
+      <h3>${escapeHTML(window.label)}</h3>
+
+      <p>${escapeHTML(window.explanation)}</p>
+
+      <p>
+        <strong>Earliest suggested date:</strong>
+        ${escapeHTML(formatCalendarDate(lowerDate))}
+      </p>
+
+      <p>
+        <strong>Latest suggested date:</strong>
+        ${escapeHTML(formatCalendarDate(upperDate))}
+      </p>
+
+      <hr>
+
+      <p>
+        <strong>Your chosen date:</strong>
+        ${escapeHTML(formatCalendarDate(chosenDate))}
+      </p>
+
+      <p>
+        <strong>Interval:</strong>
+        ${Math.abs(actualDifference)} calendar day(s)
+      </p>
+
+      <p>
+        <strong>Documentary event:</strong>
+        ${escapeHTML(temporalMechanisms[mechanism])}
+      </p>
+
+      <p>${escapeHTML(assessment)}</p>
+
+      <p>
+        <em>
+          An administrative window is a suggestion,
+          not an established InGen policy. This tool
+          does not determine why a document was delayed.
+        </em>
+      </p>
+
+      <div class="action-row">
+        <button
+          id="copy-temporal"
+          class="secondary-button"
+        >
+          Copy Relationship
+        </button>
+
+        ${
+          temporalContext.parentTitle
+            ? `<button
+                 id="apply-temporal"
+                 class="primary-button"
+               >
+                 Apply Date to Related Exhibit
+               </button>`
+            : ""
+        }
+      </div>
+    </article>
+  `;
+
+  document.getElementById(
+    "copy-temporal"
+  ).addEventListener("click", copyTemporalRelationship);
+
+  const applyButton = document.getElementById(
+    "apply-temporal"
+  );
+
+  if (applyButton) {
+    applyButton.addEventListener(
+      "click",
+      applyTemporalRelationship
+    );
+  }
+}
+
+async function copyTemporalRelationship() {
+  const window = temporalWindows[
+    temporalContext.category
+  ];
+
+  const text = [
+    "PROPOSED TEMPORAL RELATIONSHIP",
+    "Parent: " + (
+      temporalContext.parentTitle || "Independent"
+    ),
+    "Related: " + (
+      temporalContext.relatedTitle || "Unspecified"
+    ),
+    "Anchor Date: " + temporalContext.anchorDate,
+    "Direction: " + temporalContext.direction,
+    "Administrative Process: " + window.label,
+    "Date Represents: " +
+      temporalMechanisms[temporalContext.mechanism],
+    "Chosen Date: " + temporalContext.chosenDate,
+    "Suggested Interval: " +
+      window.minimum + "–" + window.maximum + " days",
+    "",
+    "Status: Proposed — Not Established Canon"
+  ].join("\n");
+
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("Temporal relationship copied.");
+  } catch (error) {
+    alert("Clipboard access is unavailable.");
+  }
+}
+
+function applyTemporalRelationship() {
+  if (
+    !currentRelatedExhibit ||
+    !parseCalendarDate(temporalContext.chosenDate)
+  ) {
+    alert("No valid related exhibit is selected.");
+    return;
+  }
+
+  currentRelatedExhibit.proposedDate =
+    temporalContext.chosenDate;
+
+  // Update the saved record if this related exhibit
+  // has already been saved.
+
+  const savedIndex = savedExhibits.findIndex(
+    item => item.id === currentRelatedExhibit.id
+  );
+
+  if (savedIndex !== -1) {
+    savedExhibits[savedIndex].proposedDate =
+      temporalContext.chosenDate;
+
+    if (!persistSavedExhibits()) {
+      alert("The date could not be persisted.");
+      return;
+    }
+  }
+
+  alert(
+    "Chosen date applied to the related exhibit. " +
+    "This remains a proposal, not established canon."
+  );
 }
