@@ -150,7 +150,7 @@ function escapeHTML(value) {
 }
 
 
-function getToday'sDate() {
+function getTodaysDate() {
   const now = new Date();
 
   const year = now.getFullYear();
